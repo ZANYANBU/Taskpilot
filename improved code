@@ -1,0 +1,357 @@
+import customtkinter as ctk
+from tkinter import messagebox, filedialog, simpledialog
+import webbrowser
+import requests, json, csv, sqlite3, re, configparser, feedparser, threading, time, os
+import praw
+from datetime import datetime
+
+# ─── Appearance Settings ───────────────────────────────────────────────────────
+ctk.set_appearance_mode("dark")
+ctk.set_default_color_theme("blue")
+
+# ─── Constants ─────────────────────────────────────────────────────────────────
+DEFAULT_USER_AGENT = "taskpilot-agent/1.0"
+CONFIG_FILE        = "taskpilot_config.ini"
+DB_NAME            = "taskpilot.db"
+UA_HEADERS         = {"User-Agent": "Mozilla/5.0"}
+REGION_CODES       = {
+    "united_states": "US", "united_kingdom": "GB",
+    "japan": "JP", "germany": "DE", "australia": "AU"
+}
+REDIRECT_URI       = "http://localhost:8080"
+
+# ─── Default Configuration ─────────────────────────────────────────────────────
+DEFAULT_CONFIG = {
+    'GROQ':    {'api_key': '',     'model': ''},
+    'REDDIT': {
+        'client_id':     '',
+        'client_secret': '',
+        'username':      '',
+        'password':      '',
+        'refresh_token': '',
+        'user_agent':    DEFAULT_USER_AGENT
+    }
+}
+
+# ─── Configuration Load/Save ───────────────────────────────────────────────────
+
+def load_config():
+    cfg = configparser.ConfigParser()
+    if not os.path.exists(CONFIG_FILE):
+        cfg.read_dict(DEFAULT_CONFIG)
+        with open(CONFIG_FILE, 'w') as f:
+            cfg.write(f)
+    else:
+        cfg.read(CONFIG_FILE)
+        for section, defaults in DEFAULT_CONFIG.items():
+            if section not in cfg:
+                cfg[section] = {}
+            for key, val in defaults.items():
+                cfg[section].setdefault(key, val)
+    return cfg
+
+config = load_config()
+
+def save_config():
+    # GROQ
+    config['GROQ']['api_key'] = groq_api_entry.get().strip()
+    config['GROQ']['model']   = groq_model_entry.get().strip()
+    # REDDIT
+    rd = config['REDDIT']
+    rd['client_id']     = reddit_id_entry.get().strip()
+    rd['client_secret'] = reddit_secret_entry.get().strip()
+    rd['username']      = reddit_user_entry.get().strip()
+    rd['password']      = reddit_pass_entry.get().strip()
+    rd['refresh_token'] = reddit_refresh_entry.get().strip()
+    rd['user_agent']    = reddit_agent_entry.get().strip() or DEFAULT_USER_AGENT
+    with open(CONFIG_FILE, 'w') as f:
+        config.write(f)
+    messagebox.showinfo("Saved", "Configuration updated.")
+
+# ─── OAuth Refresh Token Flow ───────────────────────────────────────────────────
+
+def obtain_refresh_token():
+    client_id = reddit_id_entry.get().strip()
+    if not client_id:
+        messagebox.showerror("Error", "Client ID is required to get refresh token.")
+        return
+    reddit_app = praw.Reddit(
+        client_id=client_id,
+        client_secret=None,
+        redirect_uri=REDIRECT_URI,
+        user_agent=reddit_agent_entry.get().strip() or DEFAULT_USER_AGENT
+    )
+    auth_url = reddit_app.auth.url(scopes=["submit"], duration="permanent")
+    webbrowser.open(auth_url)
+    callback = simpledialog.askstring(
+        "Authorization",
+        "Visit the opened URL, authorize the app, then paste the full redirect URL here:"
+    )
+    if callback and "code=" in callback:
+        code = callback.split("code=")[1]
+        token = reddit_app.auth.authorize(code)
+        reddit_refresh_entry.delete(0, 'end')
+        reddit_refresh_entry.insert(0, token)
+        messagebox.showinfo("Success", "Refresh token obtained. Save configuration.")
+    else:
+        messagebox.showwarning("Cancelled", "No authorization code found.")
+
+# ─── Reddit Initialization & Validation ────────────────────────────────────────
+
+reddit = None
+
+def get_reddit_instance():
+    rd = config['REDDIT']
+    if rd.get('refresh_token'):
+        return praw.Reddit(
+            client_id=rd['client_id'],
+            client_secret=None,
+            refresh_token=rd['refresh_token'],
+            redirect_uri=REDIRECT_URI,
+            user_agent=rd['user_agent']
+        )
+    return praw.Reddit(
+        client_id=rd['client_id'],
+        client_secret=rd['client_secret'],
+        username=rd['username'],
+        password=rd['password'],
+        user_agent=rd['user_agent']
+    )
+
+def validate_reddit():
+    global reddit
+    try:
+        reddit = get_reddit_instance()
+        me = reddit.user.me()
+        messagebox.showinfo("Authenticated", f"Logged in as u/{me.name}")
+        return True
+    except Exception as e:
+        messagebox.showerror("Auth Error", str(e))
+        reddit = None
+        return False
+
+# ─── LLM Helpers ────────────────────────────────────────────────────────────────
+
+def llm_request(prompt):
+    key = config['GROQ']['api_key']
+    model = config['GROQ']['model']
+    if not key or not model:
+        raise RuntimeError("GROQ API key and model must be set in Settings.")
+    res = requests.post(
+        "https://api.groq.com/openai/v1/chat/completions",
+        headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+        json={"model": model, "messages": [{"role": "user", "content": prompt}]}
+    )
+    res.raise_for_status()
+    return res.json()['choices'][0]['message']['content'].strip()
+
+# ─── Post Generation & Database ─────────────────────────────────────────────────
+
+def generate_post(topic, tone, region):
+    title_prompt = f"Viral title for '{topic}' in {tone} tone, region {region}, under 20 words."
+    title = llm_request(title_prompt).split()[:20]
+    title = ' '.join(title)
+    body_prompt = f"Write 3 engaging paragraphs about '{topic}' for {region} in {tone} tone. End with a question."
+    body = llm_request(body_prompt)
+    return title, body
+
+# Setup DB
+with sqlite3.connect(DB_NAME) as db:
+    db.execute(
+        """
+        CREATE TABLE IF NOT EXISTS posts(
+            id INTEGER PRIMARY KEY,
+            topic TEXT, title TEXT, body TEXT,
+            region TEXT, tone TEXT,
+            subreddit TEXT, link TEXT,
+            upvotes INTEGER, comments INTEGER,
+            timestamp TEXT
+        )
+        """
+    )
+
+# Log post
+def log_post(topic, title, body, region, tone, subreddit, link):
+    ts = datetime.now().isoformat()
+    with sqlite3.connect(DB_NAME) as db:
+        db.execute(
+            "INSERT INTO posts(topic,title,body,region,tone,subreddit,link,upvotes,comments,timestamp)"
+            " VALUES(?,?,?,?,?,?,?,?,?,?)",
+            (topic, title, body, region, tone, subreddit, link, 0, 0, ts)
+        )
+        db.commit()
+
+# ─── Topic Fetching ─────────────────────────────────────────────────────────────
+
+def fetch_json(url):
+    resp = requests.get(url, headers=UA_HEADERS, timeout=10)
+    clean = re.sub(r"^.*?\n", "", resp.text, count=1).strip()
+    return json.loads(clean) if clean.startswith("{") else {}
+
+
+def google_trends(region, keyword):
+    geo = REGION_CODES.get(region, 'US')
+    data = fetch_json(f"https://trends.google.com/trends/api/dailytrends?geo={geo}")
+    days = data.get('default', {}).get('trendingSearchesDays', [])
+    trends = [item['title']['query'] for d in days for item in d.get('trendingSearches', [])]
+    if keyword:
+        trends = [t for t in trends if keyword.lower() in t.lower()]
+    return trends[:5]
+
+
+def bing_news(keyword):
+    rss_url = f"https://www.bing.com/news/search?q={requests.utils.quote(keyword or 'news')}&format=RSS"
+    feed = feedparser.parse(rss_url)
+    return [e.title for e in feed.entries][:5]
+
+
+def get_topics(keyword, region):
+    topics = google_trends(region, keyword)
+    return topics if topics else bing_news(keyword)
+
+# ─── Reddit Posting & Engagement ───────────────────────────────────────────────
+
+def post_to_reddit(subreddit, title, body):
+    if not reddit:
+        raise RuntimeError("Not authenticated to Reddit.")
+    submission = reddit.subreddit(subreddit).submit(title=title, selftext=body)
+    return submission.url
+
+
+def refresh_engagement():
+    if not reddit:
+        messagebox.showerror("Error", "Not authenticated.")
+        return
+    with sqlite3.connect(DB_NAME) as db:
+        for pid, link in db.execute("SELECT id, link FROM posts WHERE link LIKE '%reddit.com%'"):
+            post = reddit.submission(url=link)
+            db.execute(
+                "UPDATE posts SET upvotes=?, comments=? WHERE id=?",
+                (post.score, post.num_comments, pid)
+            )
+        db.commit()
+    messagebox.showinfo("Updated", "Engagement stats refreshed.")
+
+# ─── Summary & Export ──────────────────────────────────────────────────────────
+
+def generate_daily_summary():
+    today = datetime.now().date().isoformat()
+    with sqlite3.connect(DB_NAME) as db:
+        rows = db.execute(
+            "SELECT topic,title,subreddit,link,upvotes,comments FROM posts WHERE DATE(timestamp)=?", (today,)
+        ).fetchall()
+    if not rows:
+        return "No posts today."                        
+    lines = [f"Daily Summary {today}"]
+    for i,(t,ti,sub,lnk,up,com) in enumerate(rows,1):
+        lines.append(f"{i}. {t} -> {ti}\n{sub}: {lnk}\n👍{up} 💬{com}\n")
+    return "\n".join(lines)
+
+
+def export_summary():
+    txt = generate_daily_summary()
+    path = filedialog.asksaveasfilename(defaultextension='.txt')
+    if path:
+        with open(path, 'w', encoding='utf-8') as f:
+            f.write(txt)
+        messagebox.showinfo("Exported", "Summary saved.")
+
+
+def export_csv():
+    path = filedialog.asksaveasfilename(defaultextension='.csv')
+    if path:
+        with sqlite3.connect(DB_NAME) as db, open(path, 'w', newline='', encoding='utf-8') as f:
+            writer = csv.writer(f)
+            writer.writerow(["ID","Topic","Title","Body","Region","Tone","Subreddit","Link","Upvotes","Comments","Timestamp"])
+            for row in db.execute("SELECT * FROM posts"):
+                writer.writerow(row)
+        messagebox.showinfo("Exported", "CSV saved.")
+
+# ─── Main Task Runner ─────────────────────────────────────────────────────────
+
+def run_task():
+    results.delete('0.0', 'end')
+    sub = subreddit_entry.get().strip()
+    if sub and not reddit and not validate_reddit():
+        results.insert('end', "❌ Reddit auth failed.\n")
+        return
+    kw = keyword_entry.get().strip()
+    tone = tone_var.get()
+    region = region_var.get()
+    topics = get_topics(kw, region)
+    if not topics:
+        results.insert('end', "❌ No topics found.\n")
+        return
+    for topic in topics:
+        try:
+            title, body = generate_post(topic, tone, region)
+        except Exception as e:
+            results.insert('end', f"⚠ LLM error on '{topic}': {e}\n---\n")
+            continue
+        link = post_to_reddit(sub, title, body) if sub else '[Skipped]'
+        log_post(topic, title, body, region, tone, sub, link)
+        results.insert('end', f"✅ {topic}: {title}\nLink: {link}\n---\n")
+        results.see('end')
+        time.sleep(1)
+
+# ─── UI Setup ─────────────────────────────────────────────────────────────────
+
+app = ctk.CTk()
+app.title("TaskPilot – Reddit Automation")
+app.geometry("900x750")
+
+tabs = ctk.CTkTabview(app)
+generate_tab = tabs.add("Generate")
+settings_tab = tabs.add("Settings")
+history_tab  = tabs.add("History")
+tabs.pack(expand=True, fill='both', padx=10, pady=10)
+
+# Generate Tab
+keyword_entry = ctk.CTkEntry(generate_tab, placeholder_text="Keyword (e.g. tech)")
+keyword_entry.pack(fill='x', padx=20, pady=(10,5))
+subreddit_entry = ctk.CTkEntry(generate_tab, placeholder_text="Subreddit (optional)")
+subreddit_entry.pack(fill='x', padx=20, pady=5)
+tone_var = ctk.StringVar(value='Informative')
+ctk.CTkOptionMenu(generate_tab, variable=tone_var, values=['Informative','Casual','Funny','Formal','Aggressive']).pack(fill='x', padx=20, pady=5)
+region_var = ctk.StringVar(value='united_states')
+ctk.CTkOptionMenu(generate_tab, variable=region_var, values=list(REGION_CODES.keys())).pack(fill='x', padx=20, pady=5)
+ctk.CTkButton(generate_tab, text="Generate & Post", command=lambda: threading.Thread(target=run_task, daemon=True).start()).pack(pady=10)
+results = ctk.CTkTextbox(generate_tab, height=350)
+results.pack(fill='both', padx=20, pady=(0,20))
+
+# Settings Tab
+groq_api_entry    = ctk.CTkEntry(settings_tab, placeholder_text="Groq API Key")
+groq_api_entry.insert(0, config['GROQ']['api_key'])
+groq_api_entry.pack(fill='x', padx=20, pady=5)
+groq_model_entry  = ctk.CTkEntry(settings_tab, placeholder_text="Groq Model")
+groq_model_entry.insert(0, config['GROQ']['model'])
+groq_model_entry.pack(fill='x', padx=20, pady=5)
+reddit_id_entry   = ctk.CTkEntry(settings_tab, placeholder_text="Reddit Client ID")
+reddit_id_entry.insert(0, config['REDDIT']['client_id'])
+reddit_id_entry.pack(fill='x', padx=20, pady=5)
+reddit_secret_entry = ctk.CTkEntry(settings_tab, placeholder_text="Client Secret", show='*')
+reddit_secret_entry.insert(0, config['REDDIT']['client_secret'])
+reddit_secret_entry.pack(fill='x', padx=20, pady=5)
+reddit_user_entry = ctk.CTkEntry(settings_tab, placeholder_text="Username")
+reddit_user_entry.insert(0, config['REDDIT']['username'])
+reddit_user_entry.pack(fill='x', padx=20, pady=5)
+reddit_pass_entry = ctk.CTkEntry(settings_tab, placeholder_text="Password", show='*')
+reddit_pass_entry.insert(0, config['REDDIT']['password'])
+reddit_pass_entry.pack(fill='x', padx=20, pady=5)
+reddit_refresh_entry = ctk.CTkEntry(settings_tab, placeholder_text="Refresh Token")
+reddit_refresh_entry.insert(0, config['REDDIT']['refresh_token'])
+reddit_refresh_entry.pack(fill='x', padx=20, pady=5)
+reddit_agent_entry = ctk.CTkEntry(settings_tab, placeholder_text="User Agent")
+reddit_agent_entry.insert(0, config['REDDIT']['user_agent'])
+reddit_agent_entry.pack(fill='x', padx=20, pady=5)
+ctk.CTkButton(settings_tab, text="Get Refresh Token", command=obtain_refresh_token).pack(pady=5)
+ctk.CTkButton(settings_tab, text="Save & Validate", command=lambda: [save_config(), validate_reddit()]).pack(pady=10)
+
+# History Tab
+ctk.CTkButton(history_tab, text="Refresh Engagement", command=refresh_engagement).pack(pady=5)
+ctk.CTkButton(history_tab, text="Export Summary", command=export_summary).pack(pady=5)
+ctk.CTkButton(history_tab, text="Export CSV", command=export_csv).pack(pady=5)
+history_box = ctk.CTkTextbox(history_tab, height=500)
+history_box.pack(fill='both', padx=20, pady=(0,20))
+
+app.mainloop()
