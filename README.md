@@ -39,7 +39,10 @@ Taskpilot is a smart desktop app that automates Reddit content creation, posting
 
 ## 📷 Screenshots
 
-> *Include some screenshots here of the GUI, post generation, and analytics (optional but recommended).*
+<img width="901" height="850" alt="image" src="https://github.com/user-attachments/assets/56371ed3-ba7b-436d-bca7-5a36386e0404" />
+
+<img width="900" height="855" alt="image" src="https://github.com/user-attachments/assets/ee0dd15f-d5d7-4756-a0c8-0f05a15cdc24" />
+<img width="1019" height="808" alt="image" src="https://github.com/user-attachments/assets/3fc20c02-4de6-4e08-b61b-493cdbbd1008" />
 
 ---
 
