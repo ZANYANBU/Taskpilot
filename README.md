@@ -1,117 +1,133 @@
-# Taskpilot
+# TaskPilot – Web Edition
 
-
----
-
-# 🚀 Taskpilot
-
-**AI-Powered Reddit Automation and Analytics Tool**
-Built by [V Anbu Chelvan](https://github.com/ZANYANBU)
-
-Taskpilot is a smart desktop app that automates Reddit content creation, posting, and tracking using AI. With Groq's Gemini LLM, real-time trend tracking, and a clean user interface, Taskpilot is designed for content creators, marketers, and researchers who want to save time and boost productivity.
+TaskPilot now ships as a local-first web application with a FastAPI backend and a modern client-side dashboard. It keeps the original mission—automated Reddit content creation, posting, and analytics—while adding a browser-based experience that you can expose easily on your LAN or through Tailscale.
 
 ---
 
-## 🌟 Features
+## ✨ Feature Highlights
 
-* 🤖 **AI Post Generation**: Uses Groq’s Gemini LLM to generate Reddit posts based on custom prompts, tones, and topics.
-* 🌐 **Reddit Automation**: Seamlessly post content to selected subreddits using the PRAW API.
-* 📈 **Trend Tracking**: Fetches trending topics from Bing, Google, and Reddit to stay ahead of the curve.
-* 🧠 **Customizable Tone**: Choose the tone of your posts (professional, casual, sarcastic, etc.).
-* 🗃 **Post History & Analytics**: Stores all posts in a local SQLite database with options to export to CSV.
-* 🖥 **User-Friendly GUI**: Clean and responsive interface built with `CustomTkinter`.
-* 📝 **Daily Summary**: Keeps track of daily activity and performance.
-
----
-
-## 🔧 Tech Stack
-
-| Component     | Tech Used         |
-| ------------- | ----------------- |
-| Programming   | Python 3.10+      |
-| GUI Framework | CustomTkinter     |
-| AI Model      | Groq (Gemini LLM) |
-| Reddit API    | PRAW              |
-| Database      | SQLite            |
-| Data Export   | CSV               |
+| Capability | What it does |
+| --- | --- |
+| AI Playbooks | Generate multi-paragraph Reddit post drafts with persona-aware prompts powered by Groq. |
+| Trend Scout | Pull daily Google Trends and Bing News topics for the region you care about. |
+| Auto Posting | Push content straight to Reddit with PRAW when credentials are provided. |
+| Engagement Pulse | Track upvotes/comments, export daily summaries, and keep CSV history locally. |
+| Tailscale-friendly | Run on `0.0.0.0` so your Tailscale network can reach the dashboard securely. |
 
 ---
 
-## 📷 Screenshots
-
-> *Include some screenshots here of the GUI, post generation, and analytics (optional but recommended).*
-
----
-
-## 🚀 Getting Started
-
-### Prerequisites
-
-* Python 3.10 or above
-* Groq API Key
-* Reddit Developer Credentials (Client ID & Secret)
-
-### Installation
-
-```bash
-git clone https://github.com/ZANYANBU/Taskpilot.git
-cd Taskpilot
-pip install -r requirements.txt
-```
-
-### Configuration
-
-Create a `.env` file or configure `auth.py` with:
-
-```python
-GROQ_API_KEY = "your_api_key_here"
-REDDIT_CLIENT_ID = "your_client_id"
-REDDIT_SECRET = "your_secret"
-REDDIT_USERNAME = "your_username"
-REDDIT_PASSWORD = "your_password"
-```
-
-### Run the App
-
-```bash
-python main.py
-```
-
----
-
-## 📦 Folder Structure
+## 🏗️ Architecture
 
 ```
 Taskpilot/
-├── main.py
-├── ui/                  # GUI layout and components
-├── ai/                  # AI generation logic (Groq integration)
-├── reddit/              # Reddit posting and PRAW integration
-├── data/                # SQLite and CSV logging
-├── utils/               # Helper functions
-├── assets/              # Icons and images
-└── requirements.txt
+├── backend/
+│   ├── main.py               # FastAPI application + API routes
+│   ├── config.py             # Config loader/saver against taskpilot_config.ini
+│   ├── database.py           # SQLite helpers and logging
+│   ├── models.py             # Pydantic request/response schemas
+│   ├── constants.py          # Shared constants (regions, defaults, etc.)
+│   ├── services/             # Groq, Reddit, and topic-fetching helpers
+│   └── requirements.txt      # Backend dependencies
+├── frontend/
+│   ├── index.html            # Single-page dashboard
+│   └── assets/
+│       ├── styles.css        # Modern glassmorphism-inspired styling
+│       └── app.js            # Fetch logic + UI interactions
+├── taskpilot_config.ini      # Persisted Groq + Reddit credentials
+├── taskpilot.db              # SQLite datastore for posts
+└── README.md
 ```
 
 ---
 
-## 🎓 Author
+## ✅ Prerequisites
 
-**V Anbu Chelvan**
-*First-year Computer Science student passionate about AI, automation, and real-world problem solving.*
-🔗 [GitHub](https://github.com/ZANYANBU)
-
----
-
-## 🛡️ License
-
-This project is licensed under the [MIT License](LICENSE).
+* Python 3.10+
+* Groq API key (chat completion endpoint)
+* Reddit script app credentials (client ID/secret or refresh token)
+* Node.js **not required** – the frontend is vanilla HTML/CSS/JS served statically by FastAPI
 
 ---
 
-## 🙌 Contributing
+## 🚀 Quick Start
 
-Pull requests are welcome! If you have suggestions or improvements, feel free to fork the repo and submit a PR.
+```powershell
+git clone https://github.com/ZANYANBU/Taskpilot.git
+cd Taskpilot
+
+# Backend setup
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r backend\requirements.txt
+
+# Launch API + frontend
+uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+Open <http://localhost:8000> (or the machine’s Tailscale/VPN address) to use the dashboard.
 
 ---
+
+## 🔐 Configuration
+
+Navigate to **Settings → Integrations** in the UI and add your Groq API key plus Reddit credentials. Values are saved to `taskpilot_config.ini` in the repository root. Revisit this form any time to rotate secrets.
+
+### Creating a Reddit “personal use script”
+
+1. Visit <https://old.reddit.com/prefs/apps> and click **create another app…**.
+2. Pick **script** as the type, then supply a short name and description.
+3. Set the redirect URI to `http://localhost:8080` (or the value in `backend/constants.py`).
+4. Copy the generated **client ID** (the 14-character string under the app name) and **client secret**.
+5. Back in TaskPilot’s **Settings → Reddit OAuth**, paste the client ID, secret, username, password (or refresh token), and user-agent.
+
+Once saved, TaskPilot validates the credentials automatically so the Reddit integration is ready for auto-posting or engagement sync.
+
+---
+
+## 🔁 Typical Workflow
+
+1. Head to the **Generate** view and pick keyword, persona, tone, and length.
+2. Toggle auto-post if you want immediate Reddit submissions.
+3. Click **Generate playbook** to receive multi-paragraph drafts (and links if auto-posted).
+4. Use the **History** view to sync engagement, download a daily summary, or export CSV.
+
+All posts are logged in `taskpilot.db` so you can restart the server without losing history.
+
+---
+
+## 🌐 Serving over Tailscale
+
+1. Start the FastAPI server with `--host 0.0.0.0` (already shown above).
+2. Ensure the machine is connected to Tailscale.
+3. Access the app via `http://<tailscale-ip>:8000` from any device on your tailnet.
+
+Because credentials remain on your host, we recommend restricting access to authenticated tailnet members only.
+
+---
+
+## 🛠️ Useful Commands
+
+```powershell
+# Refresh Reddit engagement stats manually
+Invoke-WebRequest -Method POST http://localhost:8000/api/refresh
+
+# Download today’s summary
+Invoke-WebRequest http://localhost:8000/api/summary?format=txt -OutFile summary.txt
+```
+
+---
+
+## 🤝 Contributing
+
+Issues and pull requests are welcome! Ideas for roadmap:
+
+* Websocket progress streaming while Groq drafts generate
+* Authentication + multi-user workspaces
+* Additional trend sources (Reddit hot topics, Twitter/X, etc.)
+
+---
+
+## 📝 License
+
+TaskPilot is released under the [MIT License](LICENSE).
 
