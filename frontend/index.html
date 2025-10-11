@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TaskPilot Control Center</title>
+    <link rel="stylesheet" href="/assets/styles.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <div id="root">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="brand-icon">
+            <img src="/assets/taskpilot-logo.svg" alt="TaskPilot logo" />
+          </div>
+          <div>
+            <h1>TaskPilot</h1>
+            <p>High-signal Reddit workflows with AI + trend scouting.</p>
+          </div>
+        </div>
+        <nav class="nav">
+          <button class="nav-btn active" data-target="generate">⚡ Generate</button>
+          <button class="nav-btn" data-target="conversations">💬 Memory</button>
+          <button class="nav-btn" data-target="history">🗂 History</button>
+          <button class="nav-btn" data-target="settings">⚙️ Settings</button>
+        </nav>
+        <section class="pulse">
+          <h2>Pulse</h2>
+          <div class="pulse-grid">
+            <article class="pulse-card" data-stat="total">
+              <span class="icon">📈</span>
+              <div>
+                <strong id="stat-total">0</strong>
+                <p>Total posts</p>
+              </div>
+            </article>
+            <article class="pulse-card" data-stat="today">
+              <span class="icon">🌞</span>
+              <div>
+                <strong id="stat-today">0</strong>
+                <p>Today</p>
+              </div>
+            </article>
+            <article class="pulse-card" data-stat="auto">
+              <span class="icon">🤖</span>
+              <div>
+                <strong id="stat-auto">0</strong>
+                <p>Auto posts</p>
+              </div>
+            </article>
+            <article class="pulse-card" data-stat="memory">
+              <span class="icon">🧠</span>
+              <div>
+                <strong id="stat-memory">0</strong>
+                <p>AI Memory</p>
+              </div>
+            </article>
+          </div>
+        </section>
+        <button class="support-btn" id="open-docs">Need help?</button>
+      </aside>
+
+      <main class="content">
+        <header class="topbar">
+          <div>
+            <h2 id="view-title">Generate campaign</h2>
+            <p id="view-subtitle">Choose your parameters, then deploy TaskPilot to craft Reddit-ready posts.</p>
+          </div>
+          <div class="topbar-actions">
+            <select id="theme-select">
+              <option value="system">System</option>
+              <option value="dark" selected>Dark</option>
+              <option value="light">Light</option>
+            </select>
+            <button id="refresh-stats" class="ghost">Refresh stats</button>
+          </div>
+        </header>
+
+        <section class="view" id="view-generate" data-view>
+          <div class="grid">
+            <form id="generate-form" class="card">
+              <h3>Prompt builder</h3>
+              <label>
+                Keyword focus
+                <input type="text" name="keyword" placeholder="e.g. AI, markets" />
+              </label>
+              <label>
+                Target subreddit
+                <input type="text" name="subreddit" placeholder="Optional" />
+              </label>
+              <div class="row">
+                <label>
+                  Tone
+                  <select name="tone">
+                    <option>Informative</option>
+                    <option>Casual</option>
+                    <option>Funny</option>
+                    <option>Formal</option>
+                    <option>Aggressive</option>
+                  </select>
+                </label>
+                <label>
+                  Region
+                  <select name="region" id="region-select"></select>
+                </label>
+              </div>
+              <div class="row">
+                <label>
+                  Persona / voice
+                  <input type="text" name="persona" value="your witty social media co-pilot" />
+                </label>
+                <label>
+                  Content length
+                  <select name="length">
+                    <option>Short</option>
+                    <option selected>Standard</option>
+                    <option>Extended</option>
+                  </select>
+                </label>
+              </div>
+              <label class="switch">
+                <input type="checkbox" name="auto_post" />
+                <span>Auto-post to Reddit when a subreddit is provided</span>
+              </label>
+              <div class="actions">
+                <button type="submit" class="primary">Generate playbook</button>
+                <button type="button" class="ghost" id="clear-results">Clear</button>
+              </div>
+              <p class="status" id="generate-status">Ready to generate.</p>
+            </form>
+
+            <section class="card results">
+              <header>
+                <h3>Results</h3>
+                <progress id="progress" value="0" max="1"></progress>
+              </header>
+              <div id="results-list" class="results-list"></div>
+            </section>
+          </div>
+
+          <section class="insights">
+            <article>
+              <h4>🧭 Creative prompt tip</h4>
+              <p>Blend persona tweaks with the Extended length preset for thought-leader vibes.</p>
+            </article>
+            <article>
+              <h4>📰 Trending nudge</h4>
+              <p>Leave the keyword empty to let TaskPilot scout Bing and Google’s freshest storylines.</p>
+            </article>
+            <article>
+              <h4>📣 Engagement CTA</h4>
+              <p>Finish with a question plus emojis to spark faster comment threads.</p>
+            </article>
+          </section>
+        </section>
+
+        <section class="view hidden" id="view-conversations" data-view>
+          <div class="conversations-layout">
+            <div class="conversations-sidebar">
+              <h3>Conversation Memory</h3>
+              <p>Your AI learns from every interaction to create more personalized content.</p>
+              <div id="conversations-list" class="conversations-list">
+                <!-- Conversations will be loaded here -->
+              </div>
+            </div>
+            <div class="conversation-detail">
+              <div id="conversation-view" class="conversation-view">
+                <div class="empty-state">
+                  <h4>🧠 AI Memory System</h4>
+                  <p>Select a conversation from the sidebar to view the AI's learning history, or generate new content to start building memory.</p>
+                  <p><strong>How it works:</strong> Each generation creates a conversation thread that the AI uses to learn your style, tone, and preferences for future posts.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="view hidden" id="view-settings" data-view>
+          <form id="settings-form" class="card stack">
+            <h3>Integrations & credentials</h3>
+            <fieldset>
+              <legend>AI Provider</legend>
+              <label>
+                Provider
+                <select name="provider" id="provider-select">
+                  <option value="groq" selected>Groq</option>
+                </select>
+              </label>
+              <label>API key <input type="password" name="api_key" autocomplete="off" /></label>
+              <label>
+                Model
+                <select name="model" id="model-select"></select>
+              </label>
+            </fieldset>
+            <fieldset>
+              <legend>Reddit OAuth</legend>
+              <div class="grid">
+                <label>Client ID <input type="text" name="reddit_client_id" /></label>
+                <label>Client secret <input type="password" name="reddit_client_secret" /></label>
+              </div>
+              <div class="grid">
+                <label>Username <input type="text" name="reddit_username" /></label>
+                <label>Password <input type="password" name="reddit_password" /></label>
+              </div>
+              <label>Refresh token <input type="text" name="reddit_refresh_token" /></label>
+              <label>User agent <input type="text" name="reddit_user_agent" /></label>
+            </fieldset>
+            <div class="actions">
+              <button type="submit" class="primary">Save & validate</button>
+              <span class="status" id="settings-status"></span>
+            </div>
+          </form>
+        </section>
+
+        <section class="view hidden" id="view-history" data-view>
+          <div class="card stack">
+            <header class="history-header">
+              <div>
+                <h3>Recent activity</h3>
+                <p>Latest runs with tracked engagement.</p>
+              </div>
+              <div class="actions">
+                <button class="ghost" id="refresh-history">Refresh engagement</button>
+                <button class="ghost" id="export-summary">Export summary</button>
+                <button class="ghost" id="export-csv">Export CSV</button>
+              </div>
+            </header>
+            <div id="history-list" class="history-list"></div>
+          </div>
+        </section>
+      </main>
+    </div>
+    <script src="/assets/app.js" type="module"></script>
+  </body>
+</html>
