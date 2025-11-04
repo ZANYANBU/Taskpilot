@@ -96,8 +96,9 @@ def init_db() -> None:
             conn.execute("UPDATE posts SET auto_posted = COALESCE(auto_posted, 0)")
         if "conversation_id" in existing_columns or "conversation_id" in added_columns:
             conn.execute("UPDATE posts SET conversation_id = COALESCE(conversation_id, '')")
-
-        conn.commit()
+        # Always normalize upvotes and comments to handle existing NULL values
+        conn.execute("UPDATE posts SET upvotes = COALESCE(upvotes, 0)")
+        conn.execute("UPDATE posts SET comments = COALESCE(comments, 0)")
 
 
 @contextmanager

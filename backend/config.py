@@ -12,11 +12,14 @@ def _ensure_defaults(cfg: configparser.ConfigParser) -> None:
     for section, defaults in DEFAULT_CONFIG.items():
         if section not in cfg:
             cfg[section] = {}
+        
+        # All values in DEFAULT_CONFIG are now dictionaries
         for key, value in defaults.items():
             current = cfg[section].get(key, "").strip()
             if not current:
                 cfg[section][key] = value
 
+    # Handle deprecated Groq models
     model_value = cfg["GROQ"].get("model", "").strip()
     if model_value in GROQ_DEPRECATED_MODELS:
         cfg["GROQ"]["model"] = GROQ_DEPRECATED_MODELS[model_value]
@@ -62,6 +65,10 @@ def save_config(payload: Dict[str, Dict[str, str]]) -> None:
         for section, values in payload.items():
             if section not in cfg:
                 cfg[section] = {}
+            if isinstance(values, str):
+                # Handle cases where a string is passed instead of a dictionary
+                # This is a workaround for the 'str' object has no attribute 'items' error
+                continue
             for key, value in values.items():
                 if key == "api_key" and value:
                     # Encrypt API keys

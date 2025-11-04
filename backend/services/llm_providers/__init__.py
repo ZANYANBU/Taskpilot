@@ -1,37 +1,11 @@
 from abc import ABC, abstractmethod
 from typing import Dict, List, Optional
 
+from .base import LLMProvider
 from .groq_adapter import GroqProvider
+from .google_adapter import GoogleProvider, GoogleError
+from .openai_adapter import OpenAIProvider
 from ..groq import GroqError
-
-
-class LLMProvider(ABC):
-    """Abstract base class for LLM providers."""
-
-    def __init__(self, name: str, api_key: str, model: str):
-        self.name = name
-        self.api_key = api_key
-        self.model = model
-
-    @abstractmethod
-    def request_completion(self, prompt: str) -> str:
-        """Request a completion from the LLM."""
-        pass
-
-    @abstractmethod
-    def list_models(self) -> List[str]:
-        """List available models for this provider."""
-        pass
-
-    @abstractmethod
-    def validate_config(self) -> bool:
-        """Validate the provider configuration."""
-        pass
-
-    @abstractmethod
-    def get_capabilities(self) -> Dict[str, bool]:
-        """Return provider capabilities (e.g., streaming, function calling)."""
-        pass
 
 
 class LLMRegistry:
@@ -80,12 +54,36 @@ def create_provider(name: str, api_key: str, model: str) -> Optional[LLMProvider
     """Factory function to create a provider instance."""
     if name == "groq":
         return GroqProvider(api_key, model)
-    # Add other providers here
+    elif name == "google":
+        return GoogleProvider(api_key, model)
+    elif name == "openai":
+        return OpenAIProvider(api_key, model)
     return None
 
 
 def request_completion(api_key: str, prompt: str, model: str) -> str:
-    """Backward compatibility function for Groq."""
+    """Request completion from appropriate LLM provider.
+    
+    Determines provider based on the model name or tries OpenAI first if available.
+    """
+    # Check if it's an OpenAI model
+    if model and any(o_model in model for o_model in ["gpt-", "gpt3", "gpt4"]):
+        provider = create_provider("openai", api_key, model)
+        if provider:
+            result = provider.request_completion(prompt)
+            if result:
+                return result
+    
+    # Check if it's a Google model
+    if model and any(g_model in model for g_model in ["gemini", "gemini-pro", "gemini-1.5"]):
+        provider = create_provider("google", api_key, model)
+        if provider:
+            try:
+                return provider.request_completion(prompt)
+            except GoogleError as e:
+                raise GoogleError(str(e)) from None
+    
+    # Default to Groq
     provider = create_provider("groq", api_key, model)
     if provider:
         return provider.request_completion(prompt)

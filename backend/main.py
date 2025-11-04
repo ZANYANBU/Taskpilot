@@ -84,6 +84,16 @@ def get_config():
     cfg = get_decrypted_config()
     return ConfigResponse(
         GROQ={"api_key": cfg["GROQ"].get("api_key", ""), "model": cfg["GROQ"].get("model", "")},
+        GOOGLE={
+            "api_key": cfg["GOOGLE"].get("api_key", ""),
+            "model": cfg["GOOGLE"].get("model", ""),
+            "project_name": cfg["GOOGLE"].get("project_name", ""),
+            "project_number": cfg["GOOGLE"].get("project_number", ""),
+        },
+        OPENAI={
+            "api_key": cfg["OPENAI"].get("api_key", ""),
+            "model": cfg["OPENAI"].get("model", ""),
+        },
         REDDIT={
             "client_id": cfg["REDDIT"].get("client_id", ""),
             "client_secret": cfg["REDDIT"].get("client_secret", ""),
@@ -100,6 +110,10 @@ def update_config(body: ConfigUpdate):
     payload: Dict[str, Dict[str, str]] = {}
     if body.GROQ is not None:
         payload["GROQ"] = body.GROQ.dict()
+    if body.GOOGLE is not None:
+        payload["GOOGLE"] = body.GOOGLE.dict()
+    if body.OPENAI is not None:
+        payload["OPENAI"] = body.OPENAI.dict()
     if body.REDDIT is not None:
         payload["REDDIT"] = body.REDDIT.dict()
     if not payload:

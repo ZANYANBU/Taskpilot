@@ -1,7 +1,7 @@
 import requests
 from typing import Dict, List
 
-from . import LLMProvider
+from .base import LLMProvider
 from ...constants import GROQ_DEFAULT_MODEL, GROQ_DEPRECATED_MODELS
 from ..groq import GroqError
 

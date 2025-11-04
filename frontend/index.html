@@ -124,6 +124,14 @@
                   </select>
                 </label>
               </div>
+              <label>
+                AI Provider
+                <select name="ai_provider" id="ai-provider-select">
+                  <option value="google">🤖 Google (Gemini)</option>
+                  <option value="openai">🧠 OpenAI (GPT)</option>
+                  <option value="groq">⚡ Groq (Llama)</option>
+                </select>
+              </label>
               <label class="switch">
                 <input type="checkbox" name="auto_post" />
                 <span>Auto-post to Reddit when a subreddit is provided</span>
@@ -189,10 +197,16 @@
               <label>
                 Provider
                 <select name="provider" id="provider-select">
-                  <option value="groq" selected>Groq</option>
+                  <option value="google">Google (Gemini)</option>
+                  <option value="openai">OpenAI (GPT)</option>
+                  <option value="groq">Groq (Llama)</option>
                 </select>
               </label>
-              <label>API key <input type="password" name="api_key" autocomplete="off" /></label>
+              <label id="api-key-label">API key <input type="password" name="api_key" autocomplete="off" /></label>
+              <div id="google-fields" class="provider-fields hidden">
+                <label>Project Name <input type="text" name="project_name" placeholder="projects/123456789" /></label>
+                <label>Project Number <input type="text" name="project_number" placeholder="123456789" /></label>
+              </div>
               <label>
                 Model
                 <select name="model" id="model-select"></select>
