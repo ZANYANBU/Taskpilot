@@ -22,6 +22,8 @@ const statAuto = document.getElementById('stat-auto');
 const statMemory = document.getElementById('stat-memory');
 const regionSelect = document.getElementById('region-select');
 const modelSelect = document.getElementById('model-select');
+const providerSelect = document.getElementById('provider-select');
+const aiProviderSelect = document.getElementById('ai-provider-select');
 const conversationsList = document.getElementById('conversations-list');
 const conversationView = document.getElementById('conversation-view');
 
@@ -33,12 +35,28 @@ const REGION_CODES = {
   australia: 'Australia'
 };
 
-const GROQ_MODELS = [
-  'llama-3.1-8b-instant',
-  'llama-3.1-70b-versatile',
-  'llama-guard-3-8b',
-  'gemma2-9b-it'
-];
+const PROVIDER_MODELS = {
+  groq: [
+    'llama-3.1-8b-instant',
+    'llama-3.1-70b-versatile',
+    'llama-guard-3-8b'
+  ],
+  google: [
+    'gemini-2.0-flash',
+    'gemini-1.5-flash',
+    'gemini-1.5-pro',
+    'gemini-pro'
+  ],
+  openai: [
+    'gpt-3.5-turbo',
+    'gpt-4',
+    'gpt-4-turbo',
+    'gpt-4o',
+    'gpt-4o-mini'
+  ]
+};
+
+const GROQ_MODELS = PROVIDER_MODELS.groq;
 
 function applyTheme(mode) {
   document.documentElement.dataset.theme = mode;
@@ -117,6 +135,26 @@ function populateModels(models) {
 }
 
 populateModels(GROQ_MODELS);
+
+// Handle provider selection change
+if (providerSelect) {
+  providerSelect.addEventListener('change', (e) => {
+    const provider = e.target.value;
+    const models = PROVIDER_MODELS[provider] || PROVIDER_MODELS.groq;
+    populateModels(models);
+    
+    // Show/hide Google-specific fields
+    const googleFields = document.getElementById('google-fields');
+    if (googleFields) {
+      googleFields.classList.toggle('hidden', provider !== 'google');
+    }
+  });
+}
+
+// Set default provider for generate form
+if (aiProviderSelect) {
+  aiProviderSelect.value = 'google'; // Default to Google (Gemini)
+}
 
 async function fetchJSON(url, options) {
   const response = await fetch(url, options);
@@ -257,20 +295,47 @@ async function loadConversationDetail(conversationId) {
 async function preloadConfig() {
   try {
     const config = await fetchJSON('/api/config');
-    // For now, default to Groq
-    settingsForm.provider.value = 'groq';
-    if (!GROQ_MODELS.includes(config.GROQ.model)) {
-      GROQ_MODELS.push(config.GROQ.model);
-      populateModels(GROQ_MODELS);
+    
+    // Determine which provider has an API key set
+    let activeProvider = 'google'; // Default to Google
+    if (config.GOOGLE && config.GOOGLE.api_key) {
+      activeProvider = 'google';
+    } else if (config.OPENAI && config.OPENAI.api_key) {
+      activeProvider = 'openai';
+    } else if (config.GROQ && config.GROQ.api_key) {
+      activeProvider = 'groq';
     }
-    settingsForm.api_key.value = config.GROQ.api_key;
-    settingsForm.model.value = config.GROQ.model;
-    settingsForm.reddit_client_id.value = config.REDDIT.client_id;
-    settingsForm.reddit_client_secret.value = config.REDDIT.client_secret;
-    settingsForm.reddit_username.value = config.REDDIT.username;
-    settingsForm.reddit_password.value = config.REDDIT.password;
-    settingsForm.reddit_refresh_token.value = config.REDDIT.refresh_token;
-    settingsForm.reddit_user_agent.value = config.REDDIT.user_agent;
+    
+    settingsForm.provider.value = activeProvider;
+    
+    // Update models dropdown for selected provider
+    const models = PROVIDER_MODELS[activeProvider] || PROVIDER_MODELS.groq;
+    populateModels(models);
+    
+    // Load provider-specific config
+    const providerConfig = config[activeProvider.toUpperCase()];
+    if (providerConfig) {
+      settingsForm.api_key.value = providerConfig.api_key || '';
+      settingsForm.model.value = providerConfig.model || '';
+      
+      // Handle Google-specific fields
+      if (activeProvider === 'google') {
+        if (settingsForm.project_name) settingsForm.project_name.value = providerConfig.project_name || '';
+        if (settingsForm.project_number) settingsForm.project_number.value = providerConfig.project_number || '';
+        const googleFields = document.getElementById('google-fields');
+        if (googleFields) googleFields.classList.remove('hidden');
+      }
+    }
+    
+    // Load Reddit config
+    if (config.REDDIT) {
+      settingsForm.reddit_client_id.value = config.REDDIT.client_id || '';
+      settingsForm.reddit_client_secret.value = config.REDDIT.client_secret || '';
+      settingsForm.reddit_username.value = config.REDDIT.username || '';
+      settingsForm.reddit_password.value = config.REDDIT.password || '';
+      settingsForm.reddit_refresh_token.value = config.REDDIT.refresh_token || '';
+      settingsForm.reddit_user_agent.value = config.REDDIT.user_agent || '';
+    }
   } catch (error) {
     settingsStatus.textContent = error.message;
   }
@@ -279,11 +344,9 @@ async function preloadConfig() {
 settingsForm.addEventListener('submit', async (event) => {
   event.preventDefault();
   settingsStatus.textContent = 'Saving…';
+  
+  const provider = settingsForm.provider.value;
   const payload = {
-    GROQ: {
-      api_key: settingsForm.api_key.value,
-      model: settingsForm.model.value
-    },
     REDDIT: {
       client_id: settingsForm.reddit_client_id.value,
       client_secret: settingsForm.reddit_client_secret.value,
@@ -293,6 +356,27 @@ settingsForm.addEventListener('submit', async (event) => {
       user_agent: settingsForm.reddit_user_agent.value
     }
   };
+  
+  // Add provider-specific config
+  if (provider === 'google') {
+    payload.GOOGLE = {
+      api_key: settingsForm.api_key.value,
+      model: settingsForm.model.value,
+      project_name: settingsForm.project_name ? settingsForm.project_name.value : '',
+      project_number: settingsForm.project_number ? settingsForm.project_number.value : ''
+    };
+  } else if (provider === 'openai') {
+    payload.OPENAI = {
+      api_key: settingsForm.api_key.value,
+      model: settingsForm.model.value
+    };
+  } else if (provider === 'groq') {
+    payload.GROQ = {
+      api_key: settingsForm.api_key.value,
+      model: settingsForm.model.value
+    };
+  }
+  
   try {
     const response = await fetchJSON('/api/config', {
       method: 'POST',
@@ -331,7 +415,8 @@ generateForm.addEventListener('submit', async (event) => {
     region: generateForm.region.value,
     persona: generateForm.persona.value,
     length: generateForm.length.value,
-    auto_post: generateForm.auto_post.checked
+    auto_post: generateForm.auto_post.checked,
+    ai_provider: generateForm.ai_provider ? generateForm.ai_provider.value : 'google'
   };
 
   try {

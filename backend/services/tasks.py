@@ -73,7 +73,29 @@ def _build_style_context(persona: str, conversation_id: str = "", limit: int = 5
     )
 
 
-def _build_title(topic: str, tone: str, region: str, persona: str, config, style_context: str) -> str:
+def _get_provider_priority(preferred_provider: str = None, config = None) -> list:
+    """Determine the priority order of AI providers based on user preference and availability."""
+    # Default priority order
+    default_order = ["google", "openai", "groq"]
+    
+    # If user specified a provider, try it first
+    if preferred_provider and preferred_provider.lower() in ["google", "openai", "groq"]:
+        preferred = preferred_provider.lower()
+        # Move preferred to front
+        priority = [preferred] + [p for p in default_order if p != preferred]
+        return priority
+    
+    # Check config for default provider setting
+    if config and "SETTINGS" in config:
+        default_provider = config["SETTINGS"].get("default_llm_provider", "").lower()
+        if default_provider in ["google", "openai", "groq"]:
+            priority = [default_provider] + [p for p in default_order if p != default_provider]
+            return priority
+    
+    return default_order
+
+
+def _build_title(topic: str, tone: str, region: str, persona: str, config, style_context: str, preferred_provider: str = None) -> str:
     prompt_parts = []
     if style_context:
         prompt_parts.append(style_context)
@@ -83,13 +105,36 @@ def _build_title(topic: str, tone: str, region: str, persona: str, config, style
         f"Lean into the persona '{persona}' if it adds flair, and include one relevant emoji only if it boosts appeal."
     )
     prompt = "\n\n".join(prompt_parts)
-    title = request_completion(config["GROQ"]["api_key"], prompt, config["GROQ"]["model"]).split()
+    
+    # Determine provider priority based on user selection or default
+    providers = _get_provider_priority(preferred_provider, config)
+    
+    # Try providers in order
+    for provider_name in providers:
+        try:
+            provider_config = config.get(provider_name.upper(), {})
+            api_key = provider_config.get("api_key", "")
+            model = provider_config.get("model", "")
+            if api_key and model:
+                title = request_completion(api_key, prompt, model).split()
+                if len(title) > 18:
+                    title = title[:18]
+                return " ".join(title)
+        except:
+            continue
+    
+    # Final fallback to Groq
+    try:
+        title = request_completion(config["GROQ"]["api_key"], prompt, config["GROQ"]["model"]).split()
+    except:
+        title = request_completion(config["GROQ"]["api_key"], prompt, config["GROQ"]["model"]).split()
+    
     if len(title) > 18:
         title = title[:18]
     return " ".join(title)
 
 
-def _build_body(topic: str, tone: str, region: str, persona: str, paragraphs: int, config, style_context: str) -> str:
+def _build_body(topic: str, tone: str, region: str, persona: str, paragraphs: int, config, style_context: str, preferred_provider: str = None) -> str:
     prompt_parts = []
     if style_context:
         prompt_parts.append(style_context)
@@ -100,6 +145,24 @@ def _build_body(topic: str, tone: str, region: str, persona: str, paragraphs: in
         f"where it enhances readability. Make sure the voice is consistent with the style samples above."
     )
     prompt = "\n\n".join(prompt_parts)
+    
+    # Determine provider priority based on user selection or default
+    providers = _get_provider_priority(preferred_provider, config)
+    
+    # Try providers in order
+    for provider_name in providers:
+        try:
+            provider_config = config.get(provider_name.upper(), {})
+            api_key = provider_config.get("api_key", "")
+            model = provider_config.get("model", "")
+            if api_key and model:
+                result = request_completion(api_key, prompt, model)
+                if result:
+                    return result
+        except:
+            continue
+    
+    # Final fallback to Groq
     return request_completion(config["GROQ"]["api_key"], prompt, config["GROQ"]["model"])
 
 
@@ -129,11 +192,12 @@ def generate_posts(payload: GenerateRequest) -> List[GeneratedPost]:
 
     results: List[GeneratedPost] = []
     paragraphs = CONTENT_LENGTH_PRESETS.get(payload.clamp_length(), CONTENT_LENGTH_PRESETS["Standard"])
+    preferred_provider = payload.ai_provider
 
     for topic in topics:
         try:
-            title = _build_title(topic, payload.tone, payload.region, payload.persona, config, style_context)
-            body = _build_body(topic, payload.tone, payload.region, payload.persona, paragraphs, config, style_context)
+            title = _build_title(topic, payload.tone, payload.region, payload.persona, config, style_context, preferred_provider)
+            body = _build_body(topic, payload.tone, payload.region, payload.persona, paragraphs, config, style_context, preferred_provider)
 
             # Add assistant response to conversation
             assistant_content = f"Generated post - Title: {title}\n\nBody: {body}"

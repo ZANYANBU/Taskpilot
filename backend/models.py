@@ -10,6 +10,18 @@ class ConfigSection(BaseModel):
     model: str = DEFAULT_CONFIG["GROQ"]["model"]
 
 
+class GoogleSection(BaseModel):
+    api_key: str = ""
+    model: str = DEFAULT_CONFIG["GOOGLE"]["model"]
+    project_name: str = ""
+    project_number: str = ""
+
+
+class OpenAISection(BaseModel):
+    api_key: str = ""
+    model: str = DEFAULT_CONFIG["OPENAI"]["model"]
+
+
 class RedditSection(BaseModel):
     client_id: str = ""
     client_secret: str = ""
@@ -21,11 +33,15 @@ class RedditSection(BaseModel):
 
 class ConfigResponse(BaseModel):
     GROQ: ConfigSection
+    GOOGLE: GoogleSection
+    OPENAI: OpenAISection
     REDDIT: RedditSection
 
 
 class ConfigUpdate(BaseModel):
     GROQ: Optional[ConfigSection] = None
+    GOOGLE: Optional[GoogleSection] = None
+    OPENAI: Optional[OpenAISection] = None
     REDDIT: Optional[RedditSection] = None
 
 
@@ -37,6 +53,7 @@ class GenerateRequest(BaseModel):
     length: str = Field(default="Standard")
     subreddit: Optional[str] = Field(default=None)
     auto_post: bool = Field(default=False)
+    ai_provider: Optional[str] = Field(default=None, description="AI provider to use (google, openai, groq)")
 
     def clamp_length(self) -> str:
         if self.length not in CONTENT_LENGTH_PRESETS:
