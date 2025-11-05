@@ -4,7 +4,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 CONFIG_FILE = BASE_DIR / "taskpilot_config.ini"
 DB_FILE = BASE_DIR / "taskpilot.db"
 DEFAULT_USER_AGENT = "taskpilot-agent/2.0"
-REDIRECT_URI = "http://localhost:8080"
+REDIRECT_URI = "http://localhost:8000/"
 UA_HEADERS = {"User-Agent": "Mozilla/5.0"}
 REGION_CODES = {
     "united_states": "US",
