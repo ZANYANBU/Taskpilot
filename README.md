@@ -134,3 +134,9 @@ Issues and pull requests are welcome! Ideas for roadmap:
 
 TaskPilot is released under the [MIT License](LICENSE).
 
+
+---
+
+## Legacy desktop version
+
+TaskPilot started as a desktop app built with CustomTkinter. The two earlier versions and a Windows build are kept in [`legacy/`](legacy/) for reference. The web edition above replaces them.
