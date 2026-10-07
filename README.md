@@ -2,6 +2,9 @@
 
 TaskPilot now ships as a local-first web application with a FastAPI backend and a modern client-side dashboard. It keeps the original mission—automated Reddit content creation, posting, and analytics—while adding a browser-based experience that you can expose easily on your LAN or through Tailscale.
 
+
+<p align="center"><img src="docs/dashboard.png" alt="The TaskPilot dashboard: prompt builder, provider picker and live stats" width="900"></p>
+
 ---
 
 ## ✨ Feature Highlights
